@@ -1,62 +1,175 @@
 package com.dam.framework.dialect;
 
 import com.dam.framework.engine.EntityMetadata;
+import com.dam.framework.engine.SQLGenerator;
+
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Date;
 
 /**
  * SQL Server-specific SQL dialect implementation.
+ * Supports SQL Server 2012+ features including OFFSET/FETCH pagination.
  * 
  * @author Dev 1
  */
 public class SQLServerDialect implements Dialect {
     
+    private final SQLGenerator sqlGenerator = new SQLGenerator();
+    
     @Override
     public String getInsertSQL(EntityMetadata metadata) {
-        // TODO: Dev 1 - Implement SQL Server INSERT
-        throw new UnsupportedOperationException("Not implemented yet");
+        return sqlGenerator.generateInsertSQL(metadata);
     }
     
     @Override
     public String getUpdateSQL(EntityMetadata metadata) {
-        // TODO: Dev 1 - Implement SQL Server UPDATE
-        throw new UnsupportedOperationException("Not implemented yet");
+        return sqlGenerator.generateUpdateSQL(metadata);
     }
     
     @Override
     public String getDeleteSQL(EntityMetadata metadata) {
-        // TODO: Dev 1 - Implement SQL Server DELETE
-        throw new UnsupportedOperationException("Not implemented yet");
+        return sqlGenerator.generateDeleteSQL(metadata);
     }
     
     @Override
     public String getSelectSQL(EntityMetadata metadata) {
-        // TODO: Dev 1 - Implement SQL Server SELECT
-        throw new UnsupportedOperationException("Not implemented yet");
+        return sqlGenerator.generateSelectSQL(metadata);
     }
     
     @Override
     public String getSelectByIdSQL(EntityMetadata metadata) {
-        // TODO: Dev 1 - Implement SQL Server SELECT by ID
-        throw new UnsupportedOperationException("Not implemented yet");
+        return sqlGenerator.generateSelectByIdSQL(metadata);
     }
     
     @Override
     public String getPaginationSQL(String sql, int limit, int offset) {
-        // TODO: Dev 1 - Implement SQL Server pagination
-        // SQL Server uses: OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-        return sql + " OFFSET " + offset + " ROWS FETCH NEXT " + limit + " ROWS ONLY";
+        // SQL Server 2012+ uses: OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+        // Note: ORDER BY is required for this syntax
+        StringBuilder sb = new StringBuilder(sql);
+        
+        // Check if ORDER BY exists, if not add a default one
+        if (!sql.toUpperCase().contains("ORDER BY")) {
+            sb.append(" ORDER BY (SELECT NULL)");
+        }
+        
+        sb.append(" OFFSET ").append(offset).append(" ROWS");
+        if (limit > 0) {
+            sb.append(" FETCH NEXT ").append(limit).append(" ROWS ONLY");
+        }
+        return sb.toString();
     }
     
     @Override
     public String getColumnType(Class<?> javaType) {
-        // TODO: Dev 1 - Map Java types to SQL Server column types
+        // Map Java types to SQL Server column types
         if (javaType == String.class) return "NVARCHAR(255)";
         if (javaType == Integer.class || javaType == int.class) return "INT";
         if (javaType == Long.class || javaType == long.class) return "BIGINT";
+        if (javaType == Short.class || javaType == short.class) return "SMALLINT";
+        if (javaType == Byte.class || javaType == byte.class) return "TINYINT";
+        if (javaType == Float.class || javaType == float.class) return "REAL";
+        if (javaType == Double.class || javaType == double.class) return "FLOAT";
+        if (javaType == Boolean.class || javaType == boolean.class) return "BIT";
+        if (javaType == BigDecimal.class) return "DECIMAL(19,4)";
+        if (javaType == BigInteger.class) return "DECIMAL(19,0)";
+        if (javaType == Date.class || javaType == LocalDateTime.class) return "DATETIME2";
+        if (javaType == LocalDate.class) return "DATE";
+        if (javaType == LocalTime.class) return "TIME";
+        if (javaType == byte[].class) return "VARBINARY(MAX)";
+        if (javaType == Character.class || javaType == char.class) return "NCHAR(1)";
         return "NVARCHAR(255)";
     }
     
     @Override
     public String getIdentityColumnString() {
-        return "IDENTITY"; // SQL Server uses IDENTITY
+        return "IDENTITY(1,1)"; // SQL Server uses IDENTITY with seed and increment
+    }
+    
+    /**
+     * Get CREATE TABLE SQL for SQL Server.
+     * 
+     * @param metadata Entity metadata
+     * @return CREATE TABLE SQL statement
+     */
+    public String getCreateTableSQL(EntityMetadata metadata) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='");
+        sql.append(metadata.getTableName());
+        sql.append("' AND xtype='U')\n");
+        sql.append("CREATE TABLE ");
+        sql.append(metadata.getTableName());
+        sql.append(" (");
+        
+        boolean first = true;
+        
+        // ID field first
+        Field idField = metadata.getIdField();
+        if (idField != null) {
+            String idColumnName = metadata.getIdColumnName();
+            sql.append(idColumnName).append(" ");
+            sql.append(getColumnType(idField.getType()));
+            if (metadata.isIdAutoGenerated()) {
+                sql.append(" ").append(getIdentityColumnString());
+            }
+            sql.append(" PRIMARY KEY");
+            first = false;
+        }
+        
+        // Other fields
+        for (Field field : metadata.getNonIdFields()) {
+            if (!first) {
+                sql.append(", ");
+            }
+            String columnName = metadata.getColumnName(field);
+            sql.append(columnName).append(" ").append(getColumnType(field.getType()));
+            first = false;
+        }
+        
+        sql.append(")");
+        return sql.toString();
+    }
+    
+    /**
+     * Get the SQL Server driver class name.
+     * 
+     * @return Driver class name
+     */
+    public String getDriverClassName() {
+        return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+    }
+    
+    /**
+     * Get SQL for getting the last inserted identity value.
+     * 
+     * @return SCOPE_IDENTITY SQL
+     */
+    public String getIdentitySQL() {
+        return "SELECT SCOPE_IDENTITY()";
+    }
+    
+    /**
+     * Check if a feature is supported.
+     * 
+     * @param feature Feature name
+     * @return true if supported
+     */
+    public boolean supportsFeature(String feature) {
+        switch (feature.toUpperCase()) {
+            case "OFFSET_FETCH":
+            case "CTE":
+            case "WINDOW_FUNCTIONS":
+            case "MERGE":
+            case "OUTPUT":
+                return true;
+            case "RETURNING":
+                return false; // SQL Server uses OUTPUT instead
+            default:
+                return false;
+        }
     }
 }

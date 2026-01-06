@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Parses entity classes and builds metadata using reflection.
+ * Supports entity annotations, column mappings, and relationship annotations.
  * 
  * @author Dev 2
  */
@@ -30,15 +31,6 @@ public class MetadataParser {
             return metadataCache.get(entityClass);
         }
         
-        // TODO: Dev 2 - Implement full parsing logic
-        // Steps:
-        // 1. Check if class has @Entity annotation
-        // 2. Get table name from @Table annotation (or use class name)
-        // 3. Iterate through all fields
-        // 4. Find field with @Id annotation (primary key)
-        // 5. For each field, check for @Column annotation
-        // 6. Build and return EntityMetadata
-        
         EntityMetadata metadata = new EntityMetadata(entityClass);
         
         // Check @Entity annotation
@@ -55,18 +47,29 @@ public class MetadataParser {
         }
         metadata.setTableName(tableName);
         
-        // Parse fields
+        // Parse fields and relationships
         List<Field> entityFields = new ArrayList<>();
+        List<RelationshipMetadata> relationships = new ArrayList<>();
         Field idField = null;
         
         for (Field field : entityClass.getDeclaredFields()) {
             field.setAccessible(true);
-            entityFields.add(field);
             
             // Check for @Id annotation
             if (field.isAnnotationPresent(Id.class)) {
                 idField = field;
             }
+            
+            // Check for relationship annotations
+            RelationshipMetadata relMetadata = RelationshipMetadata.parse(field);
+            if (relMetadata != null) {
+                relationships.add(relMetadata);
+                // Relationship fields are not regular columns
+                continue;
+            }
+            
+            // Regular field (column)
+            entityFields.add(field);
         }
         
         if (idField == null) {
@@ -76,6 +79,7 @@ public class MetadataParser {
         
         metadata.setIdField(idField);
         metadata.setFields(entityFields);
+        metadata.setRelationships(relationships);
         
         // Cache the metadata
         metadataCache.put(entityClass, metadata);
@@ -88,5 +92,28 @@ public class MetadataParser {
      */
     public static void clearCache() {
         metadataCache.clear();
+    }
+    
+    /**
+     * Check if a class is an entity.
+     * 
+     * @param clazz The class to check
+     * @return true if the class has @Entity annotation
+     */
+    public static boolean isEntity(Class<?> clazz) {
+        return clazz.isAnnotationPresent(Entity.class);
+    }
+    
+    /**
+     * Get the table name for an entity class.
+     * 
+     * @param entityClass The entity class
+     * @return The table name
+     */
+    public static String getTableName(Class<?> entityClass) {
+        if (entityClass.isAnnotationPresent(Table.class)) {
+            return entityClass.getAnnotation(Table.class).name();
+        }
+        return entityClass.getSimpleName();
     }
 }
