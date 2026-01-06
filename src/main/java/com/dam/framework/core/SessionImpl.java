@@ -273,9 +273,11 @@ public class SessionImpl implements Session {
     
     /**
      * Get the underlying JDBC connection.
-     * Use with caution for advanced operations.
+     * Use with caution - for advanced operations only.
      */
+    @Override
     public Connection getConnection() {
+        checkClosed();
         return connection;
     }
     
@@ -284,16 +286,6 @@ public class SessionImpl implements Session {
      */
     public Dialect getDialect() {
         return dialect;
-    }
-    
-    /**
-     * Get the underlying JDBC connection.
-     * Use with caution - for advanced operations only.
-     */
-    @Override
-    public Connection getConnection() {
-        checkClosed();
-        return connection;
     }
     
     /**
