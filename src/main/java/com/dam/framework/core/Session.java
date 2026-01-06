@@ -67,6 +67,14 @@ public interface Session extends AutoCloseable {
     Transaction getTransaction();
     
     /**
+     * Get the underlying JDBC connection.
+     * Use with caution - for advanced operations only.
+     * 
+     * @return The JDBC Connection
+     */
+    java.sql.Connection getConnection();
+    
+    /**
      * Close this session and release the database connection.
      */
     @Override

@@ -30,6 +30,20 @@
             <version>12.4.2.jre11</version>
         </dependency>
         
+        <!-- H2 Database (Embedded - No installation required) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+        </dependency>
+        
+        <!-- SLF4J Simple Logger -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.9</version>
+        </dependency>
+        
         <!-- Connection Pool -->
         <dependency>
             <groupId>com.zaxxer</groupId>

@@ -5,6 +5,8 @@ import com.dam.framework.core.Session;
 import com.dam.framework.core.SessionFactory;
 import com.dam.framework.core.Transaction;
 
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Scanner;
 
@@ -33,6 +35,9 @@ public class ExampleApp {
             System.out.println("[✓] Framework initialized successfully!");
             System.out.println();
             
+            // Initialize database schema (for H2 in-memory database)
+            initializeSchema();
+            
             // Run demo menu
             runMenu();
             
@@ -45,6 +50,43 @@ public class ExampleApp {
                 System.out.println("\n[*] SessionFactory closed. Goodbye!");
             }
         }
+    }
+    
+    /**
+     * Initialize database schema - creates tables if they don't exist.
+     * This is especially useful for H2 in-memory database.
+     */
+    private static void initializeSchema() {
+        System.out.println("[*] Initializing database schema...");
+        try (Session session = sessionFactory.openSession()) {
+            Connection conn = session.getConnection();
+            try (Statement stmt = conn.createStatement()) {
+                // Create users table
+                stmt.execute(
+                    "CREATE TABLE IF NOT EXISTS users (" +
+                    "  id BIGINT AUTO_INCREMENT PRIMARY KEY," +
+                    "  username VARCHAR(100)," +
+                    "  email VARCHAR(255)," +
+                    "  age INT" +
+                    ")"
+                );
+                System.out.println("[✓] Table 'users' ready!");
+                
+                // Insert sample data if empty
+                var rs = stmt.executeQuery("SELECT COUNT(*) FROM users");
+                rs.next();
+                if (rs.getInt(1) == 0) {
+                    stmt.execute("INSERT INTO users (username, email, age) VALUES ('john_doe', 'john@example.com', 25)");
+                    stmt.execute("INSERT INTO users (username, email, age) VALUES ('jane_doe', 'jane@example.com', 30)");
+                    stmt.execute("INSERT INTO users (username, email, age) VALUES ('bob_smith', 'bob@example.com', 35)");
+                    System.out.println("[✓] Sample data inserted!");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[!] Warning: Could not auto-initialize schema: " + e.getMessage());
+            System.err.println("[!] If using MySQL/PostgreSQL, please run the SQL scripts manually.");
+        }
+        System.out.println();
     }
     
     private static void runMenu() {

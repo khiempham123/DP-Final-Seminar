@@ -287,6 +287,16 @@ public class SessionImpl implements Session {
     }
     
     /**
+     * Get the underlying JDBC connection.
+     * Use with caution - for advanced operations only.
+     */
+    @Override
+    public Connection getConnection() {
+        checkClosed();
+        return connection;
+    }
+    
+    /**
      * Check if session is closed.
      */
     private void checkClosed() {
